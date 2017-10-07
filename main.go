@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -22,8 +23,13 @@ func main() {
 				Desc:  "neo4j url",
 				Value: "http://localhost:7474/db/data",
 			})
+			echo := cmd.Bool(cli.BoolOpt{
+				Name:  "echo",
+				Desc:  "echo queries as they are run",
+				Value: false,
+			})
 			cmd.Action = func() {
-				if err := run(*url); err != nil {
+				if err := run(*url, *echo); err != nil {
 					log.Fatal(err)
 				}
 			}
@@ -35,7 +41,7 @@ func main() {
 	}
 }
 
-func run(url string) error {
+func run(url string, echo bool) error {
 	db, err := neoism.Connect(url)
 	if err != nil {
 		return err
@@ -46,24 +52,26 @@ func run(url string) error {
 		stmt, err := br.ReadString(';')
 		switch err {
 		case nil:
-			err = runQueryIfNotEmpty(db, stmt)
+			err = runQueryIfNotEmpty(db, stmt, echo)
 			if err != nil {
 				return err
 			}
 		case io.EOF:
-			return runQueryIfNotEmpty(db, stmt)
+			return runQueryIfNotEmpty(db, stmt, echo)
 		}
 	}
 }
 
-func runQueryIfNotEmpty(db *neoism.Database, query string) error {
+func runQueryIfNotEmpty(db *neoism.Database, query string, echo bool) error {
 	stmt := strings.TrimSpace(query)
 	if len(stmt) > 0 {
+		if echo {
+			defer fmt.Println(stmt)
+		}
+
 		cq := neoism.CypherQuery{
 			Statement: string(stmt),
 		}
-
-		log.Printf("running query : '%v'\n", stmt)
 		return db.Cypher(&cq)
 	}
 	return nil
